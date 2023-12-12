@@ -6,7 +6,7 @@ import networkx as nx
 import numpy as np
 from scipy import integrate
 import pandas as pd
-
+import argparse
 
 def disparity_filter(G, weight='weight'):
     ''' Compute significance scores (alpha) for weighted edges in G as defined in Serrano et al. 2009
@@ -130,16 +130,105 @@ def disparity_filter_alpha_cut(G,weight='weight',alpha_t=0.4, cut_mode='or'):
                 B.add_edge(u,v, weight=w[weight])
         return B                
             
-if __name__ == '__main__':
-    input_file_path = 'github_innovation_graph_2020_quarter_1.csv'
-    df = pd.read_csv(input_file_path)
+def find_optimal_alpha(G, target_percentage, max_iter=1000):
+    """
+    Determines the optimal alpha value for filtering a graph based on a target edge retention percentage.
+
+    This function uses a proportional approach to dynamically adjust the alpha value. It decrements alpha 
+    based on the difference between the current and target edge counts, aiming to find the alpha value that 
+    results in a filtered graph with a number of edges closest to the target edge count specified by the threshold.
+
+    Args:
+    ----
+    G: Weighted NetworkX graph
+        The graph for which the optimal alpha value is to be determined.
+
+    target_percentage: float
+        The target percentage of edges to retain in the graph. It should be a value between 0 and 1.
+        A target_percentage of 1.0 implies retaining all edges, while 0.1 would aim to retain 10% of the edges.
+
+    max_iter: int (default=1000)
+        The maximum number of iterations to run the proportional adjustment process. This limits the computation 
+        time and ensures the function terminates.
+
+    Returns:
+    -------
+    closest_alpha: float
+        The calculated optimal alpha value that results in a graph with the number of edges closest to the 
+        target edge count based on the specified target_percentage.
+
+    """
+    if target_percentage == 1.0:
+        return 1  # Retain all edges
+
+    total_edges = G.number_of_edges()
+    target_edges = int(total_edges * target_percentage)
+    alpha = 1
+
+    closest_alpha = alpha
+    closest_edge_count = total_edges
+    closest_diff = abs(closest_edge_count - target_edges)
+
+    for _ in range(max_iter):
+        filtered_edges = [(u, v) for u, v, d in G.edges(data=True) if ('alpha_in' in d and d['alpha_in'] < alpha) or ('alpha_out' in d and d['alpha_out'] < alpha)]
+        current_edge_count = len(filtered_edges)
+        current_diff = abs(current_edge_count - target_edges)
+
+        if current_diff <= closest_diff:
+            closest_diff = current_diff
+            closest_edge_count = current_edge_count
+            closest_alpha = alpha
+        else:
+            break  # Stop if we start moving away from the target
+
+        # Proportional step size
+        step_size = max(0.001, 0.1 * (current_diff / total_edges))
+        alpha -= step_size
+
+        if alpha < 0:
+            alpha = 0  # Ensure alpha does not go below 0
+
+    return closest_alpha
+
+def load_data(file_path):
+    return pd.read_csv(file_path)
+
+def filter_data(data, year, quarters):
+    return data[(data['year'] == year) & (data['quarter'].isin(quarters))]
+
+def load_data(file_path):
+    return pd.read_csv(file_path)
+
+def filter_data(data, year, quarters):
+    return data[(data['year'] == year) & (data['quarter'].isin(quarters))]
+
+def main():
+    parser = argparse.ArgumentParser(description='Directed Network Analysis Tool')
+    parser.add_argument('--year', type=int, choices=[2020, 2021, 2022, 2023], required=True, help='Year to filter data')
+    parser.add_argument('--quarters', type=int, nargs='+', choices=[1, 2, 3, 4], required=True, help='Quarters to filter data')
+    parser.add_argument('--threshold', type=float, required=True, help='Percentage of edges to retain (e.g., 0.10 for 10%)')
+    args = parser.parse_args()
+
+    input_file_path = 'economy_collaborators.csv'  # Replace with file path for collaboration network
+    df = load_data(input_file_path)
+    filtered_df = filter_data(df, args.year, args.quarters)
+
     Graphtype = nx.DiGraph()
-    # Create the directed graph from the dataset
-    G = nx.from_pandas_edgelist(df, source='source', target='destination', edge_attr='weight', create_using=Graphtype)
-    alpha = 0.05
+    G = nx.from_pandas_edgelist(filtered_df, source='source', target='destination', edge_attr='weight', create_using=Graphtype)
     G = disparity_filter(G)
-    G2 = nx.Graph([(u, v, d) for u, v, d in G.edges(data=True) if 'alpha' in d and d['alpha'] < alpha])
-    print('alpha = %s' % alpha)
+
+    target_percentage = args.threshold  # Use the provided threshold argument
+    optimal_alpha = find_optimal_alpha(G, target_percentage)
+
+    # Filter the graph using the optimal alpha
+    if nx.is_directed(G):
+        G2 = nx.DiGraph([(u, v, d) for u, v, d in G.edges(data=True) if ('alpha_in' in d and d['alpha_in'] < optimal_alpha) or ('alpha_out' in d and d['alpha_out'] < optimal_alpha)])
+    else:
+        G2 = nx.Graph([(u, v, d) for u, v, d in G.edges(data=True) if 'alpha' in d and d['alpha'] < optimal_alpha])
+
+    print('optimal alpha =', optimal_alpha)
     print('original: nodes = %s, edges = %s' % (G.number_of_nodes(), G.number_of_edges()))
     print('backbone: nodes = %s, edges = %s' % (G2.number_of_nodes(), G2.number_of_edges()))
-    print(G2.edges(data=True))
+
+if __name__ == '__main__':
+    main()
