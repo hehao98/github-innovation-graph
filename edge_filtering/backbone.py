@@ -202,16 +202,127 @@ def load_data(file_path):
 def filter_data(data, year, quarters):
     return data[(data['year'] == year) & (data['quarter'].isin(quarters))]
 
+def normalize_weights(df, mode='outgoing'):
+    """
+    Normalizes the weights of edges in the DataFrame based on the total outgoing or incoming connections.
+
+    Args:
+    ----
+    df: DataFrame
+        The DataFrame containing the edges with their original weights.
+
+    mode: str
+        The mode of normalization. Can be 'outgoing', 'incoming', or 'none'.
+        'outgoing' normalizes based on the sum of weights of outgoing edges for each source node.
+        'incoming' normalizes based on the sum of weights of incoming edges for each destination node.
+        'none' returns the DataFrame without any changes.
+
+    Returns:
+    -------
+    DataFrame
+        A modified DataFrame with normalized weights.
+    """
+
+    if mode == 'none':
+        # No normalization needed, return original DataFrame
+        return df
+
+    # Make a copy to ensure we are not modifying the view directly 
+    normalized_df = df.copy()
+
+    if mode == 'outgoing':
+        # Group by source and sum the weights
+        total_weights = df.groupby('source')['weight'].sum().reset_index()
+        total_weights.rename(columns={'weight': 'total_outgoing_weight'}, inplace=True)
+        normalized_df = normalized_df.merge(total_weights, on='source')
+        normalized_df['weight'] = normalized_df['weight'] / normalized_df['total_outgoing_weight']
+
+    elif mode == 'incoming':
+        # Group by destination and sum the weights
+        total_weights = df.groupby('destination')['weight'].sum().reset_index()
+        total_weights.rename(columns={'weight': 'total_incoming_weight'}, inplace=True)
+        normalized_df = normalized_df.merge(total_weights, on='destination')
+        normalized_df['weight'] = normalized_df['weight'] / normalized_df['total_incoming_weight']
+
+    # Drop the total weights columns used for normalization
+    normalized_df.drop(columns=['total_outgoing_weight', 'total_incoming_weight'], errors='ignore', inplace=True)
+
+    return normalized_df
+
+def process_entity_merging(df, merge_eu, merge_cn_hk, exclude_country=None):
+    """
+    Processes the DataFrame to handle entity merging for EU and HK-CN, including self-loop handling,
+    and excluding a specified country if needed.
+
+    Args:
+    ----
+    df: DataFrame
+        The DataFrame containing the network data.
+    merge_eu: bool
+        Flag indicating whether to use the existing 'EU' entity.
+    merge_cn_hk: bool
+        Flag indicating whether to merge Hong Kong with China.
+    exclude_country: str, optional
+        The country code to exclude from the DataFrame.
+
+    Returns:
+    -------
+    DataFrame
+        The modified DataFrame with the specified entity merges, self-loop handling, and country exclusion.
+    """
+    # Make a copy to ensure we are not modifying the view directly 
+    df = df.copy()
+
+    if merge_eu:
+        # List of EU country codes
+        eu_countries = ['AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'GR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'MT', 'NL', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK']
+        
+        # Remove edges involving individual EU countries
+        df = df[~df['source'].isin(eu_countries) & ~df['destination'].isin(eu_countries)]
+
+    if merge_cn_hk:
+        # Merge Hong Kong with China
+        df.replace({'HK': 'CN'}, inplace=True)
+
+    if exclude_country:
+        # Exclude the specified country
+        df = df[(df['source'] != exclude_country) & (df['destination'] != exclude_country)]
+
+    # Handle self-loops after merging
+    self_loops = df[df['source'] == df['destination']]
+    if not self_loops.empty:
+        # Aggregate weights of self-loops
+        aggregated_self_loops = self_loops.groupby(['source', 'year', 'quarter']).agg({'weight': 'sum'}).reset_index()
+        df = df[df['source'] != df['destination']]
+        df = pd.concat([df, aggregated_self_loops], ignore_index=True)
+    
+    return df
+
 def main():
-    parser = argparse.ArgumentParser(description='Directed Network Analysis Tool')
+    parser = argparse.ArgumentParser(description='Collaboration Network Filter')
+    parser.add_argument('--inputFilePath', required=True, help='Location of input Collaboration Network Data edgelist')
+    parser.add_argument('--outputFilePath', required=True, help='Location of output filtered edgelist')
     parser.add_argument('--year', type=int, choices=[2020, 2021, 2022, 2023], required=True, help='Year to filter data')
     parser.add_argument('--quarters', type=int, nargs='+', choices=[1, 2, 3, 4], required=True, help='Quarters to filter data')
     parser.add_argument('--threshold', type=float, required=True, help='Percentage of edges to retain (e.g., 0.10 for 10%)')
+    parser.add_argument('--normalize', choices=['outgoing', 'incoming', 'none'], default='none', help='Normalize weights by outgoing or incoming totals')
+    parser.add_argument('--mergeEU', action='store_true', help='Merge all EU countries into a single node')
+    parser.add_argument('--mergeCNHK', action='store_true', help='Combine Hong Kong with China')
+    parser.add_argument('--excludeUS', action='store_true', help='Exclude the US from the network')
+
     args = parser.parse_args()
 
-    input_file_path = 'economy_collaborators.csv'  # Replace with file path for collaboration network
+    # Load and filter data
+    input_file_path = args.inputFilePath
     df = load_data(input_file_path)
     filtered_df = filter_data(df, args.year, args.quarters)
+
+    exclude_country = 'US' if args.excludeUS else None
+    filtered_df = process_entity_merging(filtered_df, args.mergeEU, args.mergeCNHK, exclude_country)
+
+    # Normalize weights if required
+    if args.normalize != 'none':
+        filtered_df = normalize_weights(filtered_df, mode=args.normalize)
 
     Graphtype = nx.DiGraph()
     G = nx.from_pandas_edgelist(filtered_df, source='source', target='destination', edge_attr='weight', create_using=Graphtype)
@@ -229,6 +340,20 @@ def main():
     print('optimal alpha =', optimal_alpha)
     print('original: nodes = %s, edges = %s' % (G.number_of_nodes(), G.number_of_edges()))
     print('backbone: nodes = %s, edges = %s' % (G2.number_of_nodes(), G2.number_of_edges()))
+
+    # Convert G2 back to DataFrame
+    edges_df = nx.to_pandas_edgelist(G2)
+
+    # Merge with the original dataframe using inner join to keep original columns
+    merged_df = pd.merge(filtered_df, edges_df,  how='inner', left_on=['source','destination'], right_on = ['source','target'])
+    merged_df.drop(columns=['target','weight_y'], inplace=True)
+    merged_df = merged_df.rename(columns={"weight_x": "weight"})
+
+    # Write DataFrame to CSV
+    output_file_path = args.outputFilePath
+    merged_df.to_csv(output_file_path, index=False)
+
+    print(f"Filtered graph data written to {output_file_path}")
 
 if __name__ == '__main__':
     main()
