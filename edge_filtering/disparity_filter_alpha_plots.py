@@ -1,3 +1,4 @@
+import os
 import argparse
 import pandas as pd
 import networkx as nx
@@ -428,7 +429,7 @@ def analyze_network(G, alpha_values, year, quarters):
 
     quarters_str = "_".join(map(str, quarters))
     filename = f'network_analysis_{year}_Q{"_".join(map(str, quarters))}_with_normalization.pdf'
-    plt.savefig(filename, format='pdf')
+    plt.savefig(os.path.join('figs', filename), format='pdf')
     plt.close()
 
 def create_subplot_for_quarter(G, alpha_values, year, quarter):

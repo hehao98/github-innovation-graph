@@ -1,6 +1,7 @@
-jupyterlab
-pandas
-scipy
-matplotlib
-networkx
-pycountry
+jupyterlab==4.0.11
+numpy==1.26.3
+scipy==1.11.4
+pandas==2.1.4
+matplotlib==3.8.2
+networkx==3.2.1
+pycountry==23.12.11
