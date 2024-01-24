@@ -164,6 +164,7 @@ def normalize_weights(df, mode='outgoing'):
         The mode of normalization. Can be 'outgoing', 'incoming', or 'none'.
         'outgoing' normalizes based on the sum of weights of outgoing edges for each source node.
         'incoming' normalizes based on the sum of weights of incoming edges for each destination node.
+        'log' transforms the weights using the log function.
         'none' returns the DataFrame without any changes.
 
     Returns:
@@ -192,6 +193,9 @@ def normalize_weights(df, mode='outgoing'):
         total_weights.rename(columns={'weight': 'total_incoming_weight'}, inplace=True)
         normalized_df = normalized_df.merge(total_weights, on='destination')
         normalized_df['weight'] = normalized_df['weight'] / normalized_df['total_incoming_weight']
+
+    elif mode == 'log':
+        normalized_df['weight'] = np.log(normalized_df['weight'])
 
     # Drop the total weights columns used for normalization
     normalized_df.drop(columns=['total_outgoing_weight', 'total_incoming_weight'], errors='ignore', inplace=True)
@@ -314,7 +318,7 @@ def main():
     parser = argparse.ArgumentParser(description='Collaboration Network Filter')
     parser.add_argument('--inputFilePath', required=True, help='Location of input Collaboration Network Data edgelist')
     parser.add_argument('--outputFilePath', required=True, help='Location of output filtered edgelist')
-    parser.add_argument('--normalize', choices=['outgoing', 'incoming', 'none'], default='none', help='Normalize weights by outgoing or incoming totals')
+    parser.add_argument('--normalize', choices=['outgoing', 'incoming', 'log', 'none'], default='none', help='Normalize weights by outgoing or incoming totals')
     parser.add_argument('--mergeEU', action='store_true', help='Merge all EU countries into a single node')
     parser.add_argument('--mergeCNHK', action='store_true', help='Combine Hong Kong with China')
     parser.add_argument('--excludeCountries', nargs='*', type=str, default=[], help='List of country codes to exclude from the network')

@@ -38,16 +38,26 @@ For metrics 3 and 4, the purple vertical line highlights the chosen alpha value 
 To generate data for visualization:
 
 ```shell
-python edge_filtering/disparity_filter.py --inputFilePath data/economy_collaborators.csv --outputFilePath data/filtered/economy_collaborators --normalize outgoing --excludeCountries EU --optimalAlpha 0.09 0.12 0.15 1
+python edge_filtering/disparity_filter.py --inputFilePath data/economy_collaborators.csv --outputFilePath data/filtered/economy_collaborators_outgoing --normalize outgoing --excludeCountries EU --optimalAlpha 0.09
 ```
 
 Flags:
 
 * --inputFilePath economy_collaborators.csv: Use original github innovation graph data for economy_collaborators.csv 
 * --outputFilePath this is for output filename prefix. We used filtered_graph_test_combine_all_exclude_EU_normalize_sender to represent what we did, which is summing all the edge weights from all year and quarters into one file for each edge, and then we excluded EU, normalized by sender total weights. 
-* --normalize outgoing: this flag is for normalizing the weights. The options are outgoing, incoming, or none (default). In our case, we normalized by outgoing, which is normalization by total sender country weight across all its edges.
+* --normalize outgoing: this flag is for normalizing the weights. The options are outgoing, incoming, log, or none (default). In our case, we normalized by outgoing, which is normalization by total sender country weight across all its edges.
 * --excludeCountries: this flag allows for entering country codes to exclude from the data. In our case, we excluded EU
 * --optimalAlpha: this flag allows for entering a list of alpha values for filtering and the script will generate one csv output per alpha value. In our case, we used  0.09 0.12 0.15 1 (no filtering) as alpha values.
+
+To generate data for blockmodeling:
+
+```shell
+# Plot and determine the optimal alpha value
+python edge_filtering/disparity_filter_alpha_plots.py --inputFilePath data/economy_collaborators.csv --year 2023 --quarter 1 --normalize log
+# Generate using the optimal alpha 0.22
+python edge_filtering/disparity_filter.py --inputFilePath data/economy_collaborators.csv --outputFilePath data/filtered/economy_collaborators_log --normalize log --excludeCountries EU --optimalAlpha 0.22
+```
+
 
 ### Political Events
 

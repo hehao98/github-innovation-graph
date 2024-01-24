@@ -171,6 +171,7 @@ def normalize_weights(df, mode='outgoing'):
         The mode of normalization. Can be 'outgoing', 'incoming', or 'none'.
         'outgoing' normalizes based on the sum of weights of outgoing edges for each source node.
         'incoming' normalizes based on the sum of weights of incoming edges for each destination node.
+        'log' transforms the weights using the log function.
         'none' returns the DataFrame without any changes.
 
     Returns:
@@ -199,6 +200,9 @@ def normalize_weights(df, mode='outgoing'):
         total_weights.rename(columns={'weight': 'total_incoming_weight'}, inplace=True)
         normalized_df = normalized_df.merge(total_weights, on='destination')
         normalized_df['weight'] = normalized_df['weight'] / normalized_df['total_incoming_weight']
+
+    elif mode == 'log':
+        normalized_df['weight'] = np.log(normalized_df['weight'])
 
     # Drop the total weights columns used for normalization
     normalized_df.drop(columns=['total_outgoing_weight', 'total_incoming_weight'], errors='ignore', inplace=True)
@@ -258,10 +262,12 @@ def largest_component_size(G):
     """ Returns the size of the largest connected component in the graph G. """
     if nx.is_directed(G):
         # largest_comp = max(nx.strongly_connected_components(G), key=len)
-        largest_comp = max(nx.weakly_connected_components(G), key=len)
+        connected_comps = list(nx.weakly_connected_components(G))
+        largest_comp = max(connected_comps, key=len) if len(connected_comps) > 0 else []
 
     else:
-        largest_comp = max(nx.connected_components(G), key=len)
+        connected_comps = list(nx.connected_components(G))
+        largest_comp = max(connected_comps, key=len) if len(connected_comps) > 0 else []
     return len(largest_comp)
 
 def plot_cumulative_degree_distribution(G, alpha, ax, include_label):
@@ -275,6 +281,8 @@ def plot_cumulative_degree_distribution(G, alpha, ax, include_label):
         include_label (bool): Flag to include label in the plot.
     """
     degree_sequence = sorted((d for n, d in G.degree()), reverse=True)
+    if (len(degree_sequence) == 0):
+        return
     degreeCount = collections.Counter(degree_sequence)
     deg, cnt = zip(*degreeCount.items())
     cum_cnt = np.cumsum(cnt) / sum(cnt)
@@ -292,6 +300,8 @@ def plot_link_weight_distribution(G, alpha, ax, include_label):
         include_label (bool): Flag to include label in the plot.
     """
     weights = [d['weight'] for u, v, d in G.edges(data=True)]
+    if (len(weights) == 0):
+        return
     weights.sort(reverse=True)
     weight_counts = collections.Counter(weights)
     weight, freq = zip(*weight_counts.items())
@@ -317,6 +327,8 @@ def plot_clustering_coefficient(G, alpha, ax, include_label, total_edges, total_
     current_edges = G.number_of_edges()
     current_weight = sum(nx.get_edge_attributes(G, 'weight').values())
     current_nodes = G.number_of_nodes()
+    if current_nodes == 0:
+        return
 
     percent_weight = current_weight / total_weight
     percent_nodes = current_nodes / total_nodes
@@ -478,7 +490,7 @@ def main():
     parser.add_argument('--inputFilePath', required=True, help='Location of input Collaboration Network Data edgelist')
     parser.add_argument('--year', type=int, choices=[2020, 2021, 2022, 2023], required=True, help='Year to filter data')
     parser.add_argument('--quarters', type=int, nargs='+', choices=[1, 2, 3, 4], required=True, help='Quarters to filter data')
-    parser.add_argument('--normalize', choices=['outgoing', 'incoming', 'none'], default='none', help='Normalize weights by outgoing or incoming totals')
+    parser.add_argument('--normalize', choices=['outgoing', 'incoming', 'log', 'none'], default='none', help='Normalize weights by outgoing or incoming totals')
     parser.add_argument('--mergeEU', action='store_true', help='Merge all EU countries into a single node')
     parser.add_argument('--mergeCNHK', action='store_true', help='Combine Hong Kong with China')
     parser.add_argument('--excludeUS', action='store_true', help='Exclude the US from the network')
