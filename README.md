@@ -8,8 +8,9 @@ This replication package is tested with Python 3.10, [Gephi](https://gephi.org/)
 
 ### Dataset 
 
-* [data/economy_collaborators.csv](data/economy_collaborators.csv): The GitHub collaboration graph aggregated from [this repository](https://github.com/github/innovationgraph).
-* [data/ctry_civ_labels.csv](data/ctry_civ_labels.csv): The country civilization labels as categorized by [Huntington (1987)](http://www.jstor.org/stable/20045621).
+* [data/economy_collaborators.csv](data/economy_collaborators.csv): GitHub collaboration graph aggregated from [this repository](https://github.com/github/innovationgraph).
+* [data/ctry_civ_labels.csv](data/ctry_civ_labels.csv): Country civilization labels as categorized by [Huntington (1987)](http://www.jstor.org/stable/20045621).
+* [data/gdp_per_capita.csv](data/gdp_per_capita.csv): Country-level GDP per-capita data collected from the [World Bank](https://data.worldbank.org/indicator/NY.GDP.PCAP.CD)
 
 ### Data Preprocessing 
 
@@ -55,7 +56,7 @@ To generate data for blockmodeling:
 # Plot and determine the optimal alpha value
 python edge_filtering/disparity_filter_alpha_plots.py --inputFilePath data/economy_collaborators.csv --year 2023 --quarter 1 --normalize log
 # Generate using the optimal alpha 0.22
-python edge_filtering/disparity_filter.py --inputFilePath data/economy_collaborators.csv --outputFilePath data/filtered/economy_collaborators_log --normalize log --excludeCountries EU --optimalAlpha 0.22
+python edge_filtering/disparity_filter.py --inputFilePath data/economy_collaborators.csv --outputFilePath data/filtered/economy_collaborators_log --normalize log --excludeCountries EU --optimalAlpha 0.22 0.3 0.4 0.5 1.0
 ```
 
 
