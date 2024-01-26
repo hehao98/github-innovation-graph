@@ -5,3 +5,5 @@ pandas==2.1.4
 matplotlib==3.8.2
 networkx==3.2.1
 pycountry==23.12.11
+scikit-learn==1.4.0
+seaborn==0.13.2
