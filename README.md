@@ -50,18 +50,16 @@ Flags:
 * --excludeCountries: this flag allows for entering country codes to exclude from the data. In our case, we excluded EU
 * --optimalAlpha: this flag allows for entering a list of alpha values for filtering and the script will generate one csv output per alpha value. In our case, we used  0.09 0.12 0.15 1 (no filtering) as alpha values.
 
-To generate data for blockmodeling:
-
-```shell
-# Plot and determine the optimal alpha value
-python edge_filtering/disparity_filter_alpha_plots.py --inputFilePath data/economy_collaborators.csv --year 2023 --quarter 1 --normalize log
-# Generate using the optimal alpha 0.22
-python edge_filtering/disparity_filter.py --inputFilePath data/economy_collaborators.csv --outputFilePath data/filtered/economy_collaborators_log --normalize log --excludeCountries EU --optimalAlpha 0.22 0.3 0.4 0.5 1.0
-```
-
-
 ### Political Events
 
 ### Cultural Homophily
 
 The Gephi visualization files can be found in the [visualization/](visualization/) folder.
+
+### World Systems
+
+All results can be generated with the following script:
+
+```shell
+python blockmodeling/blockmodeling.py
+```
