@@ -219,9 +219,16 @@ def reciprocity_dyad(g: nx.DiGraph, node1: str, node2: str, weight: str = "weigh
         return w2 - min(w1, w2)
 
 
-def analyze(year: int = None, quarter: int = None):
+def analyze(year: int = None, quarter: int = None, partition_csv_path: str = None):
     g = get_network(year, quarter)
     partitions, threshold, score_records = get_optimal_hc(g, 20, 150, 1)
+
+    if partition_csv_path is not None:
+        with open(partition_csv_path, "w") as f:
+            f.write("country,partition\n")
+            for i, partition in enumerate(partitions):
+                for ctry in partition:
+                    f.write(f"{ctry},{i}\n")
 
     if year is not None and quarter is not None:
         suffix = f"{year}_q{quarter}"
@@ -322,7 +329,8 @@ def main():
     file_path = "data/economy_collaborators.csv"
     data = pd.read_csv(file_path, keep_default_na=False, na_values=[""])
 
-    results = analyze()  # all quarters
+    # all quarters
+    results = analyze(partition_csv_path="data/blockmodeling_partitions.csv")
     print("  Results:", results)
 
     year_quarters = sorted(set(zip(data["year"], data["quarter"])))
