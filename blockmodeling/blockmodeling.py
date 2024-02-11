@@ -1,3 +1,4 @@
+import itertools
 import numpy as np
 import pandas as pd
 import networkx as nx
@@ -11,7 +12,7 @@ from sklearn.metrics import calinski_harabasz_score
 from pycountry import countries
 
 
-def get_network(year: int = None, quarter: int = None):
+def get_network(year: int = None, quarter: int = None) -> nx.DiGraph:
     file_path = "data/economy_collaborators.csv"
     data = pd.read_csv(file_path, keep_default_na=False, na_values=[""])
     data["weight"] = np.log(data["weight"])
@@ -109,7 +110,16 @@ def plot_score_selection(threshold: float, score_records: list[float, float]):
     return fig
 
 
-def block_modeling(year: int = None, quarter: int = None, partition_csv_path: str = None):
+def block_modeling(
+    year: int = None, quarter: int = None, partition_csv_path: str = None
+):
+    if year is not None and quarter is not None:
+        suffix = f"{year}_q{quarter}"
+        print(f"Conducting block modeling in {year} Q{quarter}...")
+    else:
+        suffix = "all"
+        print(f"Conducting block modeling across all quarters...")
+
     g = get_network(year, quarter)
     partitions, threshold, score_records = get_optimal_hc(g, 20, 150, 1)
 
@@ -120,13 +130,6 @@ def block_modeling(year: int = None, quarter: int = None, partition_csv_path: st
                 for ctry in partition:
                     f.write(f"{ctry},{i}\n")
 
-    if year is not None and quarter is not None:
-        suffix = f"{year}_q{quarter}"
-        print(f"{year} Q{quarter}:")
-    else:
-        suffix = "all"
-        print(f"Across all quarters:")
-
     fig, ctry_to_color = plot_dendrogram(g, t=threshold)
     fig.savefig(f"figs/blockmodeling_{suffix}.pdf", bbox_inches="tight")
     plt.close(fig)
@@ -135,7 +138,9 @@ def block_modeling(year: int = None, quarter: int = None, partition_csv_path: st
     fig.savefig(f"figs/blockmodeling_scores_{suffix}.pdf", bbox_inches="tight")
     plt.close(fig)
 
-    gdp_data = pd.read_csv("data/gdp_per_capita.csv", keep_default_na=False, na_values=[""])
+    gdp_data = pd.read_csv(
+        "data/gdp_per_capita.csv", keep_default_na=False, na_values=[""]
+    )
     gdp_data = gdp_data[gdp_data["2020"].notna()]
     gdp = dict(zip(gdp_data["Country Code"], gdp_data["2020"]))
 
@@ -150,73 +155,10 @@ def block_modeling(year: int = None, quarter: int = None, partition_csv_path: st
 
     fig, ax = plt.subplots(1, 1, figsize=(6, 5))
     sns.violinplot(df, x="partition", y="gdp", hue="partition", palette=colors, ax=ax)
-    ax.set_ylabel("GDP per Capita")
+    ax.set_ylabel("GDP Per Capita")
     ax.set_xlabel("Country Partitiion")
     fig.savefig(f"figs/blockmodeling_gdp_{suffix}.pdf", bbox_inches="tight")
     plt.close(fig)
-
-
-def plot_reciprocity(year_quarters, metrics):
-    year_quarters = [f"{x[0]} Q{x[1]}" for x in year_quarters]
-
-    fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-    ax.plot(range(len(year_quarters)), [x["reciprocity"] for x in metrics], marker="o")
-    ax.set_xticks(range(len(year_quarters)))
-    ax.set_xticklabels(year_quarters)
-    ax.set_xlabel("Year-Quarter")
-    ax.set_ylabel("Overall Reciprocity")
-    fig.autofmt_xdate()
-    fig.savefig("figs/reciprocity.pdf", bbox_inches="tight")
-    plt.close(fig)
-
-    fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-    for label in ["core", "semi", "periphery"]:
-        non_recipro_out = [x[f"reciprocity_{label}"][0] for x in metrics]
-        if not all(x == 0 for x in non_recipro_out):
-            ax.plot(
-                range(len(year_quarters)),
-                non_recipro_out,
-                marker="o",
-                label=f"Non-Reciprocated Out ({label})",
-            )
-        non_recipro_in = [x[f"reciprocity_{label}"][1] for x in metrics]
-        if not all(x == 0 for x in non_recipro_in):
-            ax.plot(
-                range(len(year_quarters)),
-                non_recipro_in,
-                marker="o",
-                label=f"Non-Reciprocated In ({label})",
-            )
-    ax.set_xticks(range(len(year_quarters)))
-    ax.set_xticklabels(year_quarters)
-    ax.set_xlabel("Year-Quarter")
-    ax.set_ylabel("Reciprocated Weight")
-    ax.legend()
-    fig.autofmt_xdate()
-    fig.savefig("figs/reciprocity_node.pdf", bbox_inches="tight")
-    plt.close(fig)
-
-    fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-    for label in [
-        "reciprocity_core_semi",
-        "reciprocity_core_periphery",
-        "reciprocity_semi_periphery",
-    ]:
-        ax.plot(
-            range(len(year_quarters)),
-            [x[label] for x in metrics],
-            marker="o",
-            label=label.replace("reciprocity", "").replace("_", " ").title(),
-        )
-    ax.set_xticks(range(len(year_quarters)))
-    ax.set_xticklabels(year_quarters)
-    ax.set_xlabel("Year-Quarter")
-    ax.set_ylabel("Non-Reciprocated Inbound Weight")
-    ax.legend()
-    fig.autofmt_xdate()
-    fig.savefig("figs/reciprocity_dyad.pdf", bbox_inches="tight")
-    plt.close(fig)
-
 
 
 def reciprocity_all(g: nx.DiGraph, weight: str = "weight"):
@@ -235,6 +177,15 @@ def reciprocity_all(g: nx.DiGraph, weight: str = "weight"):
             total_reciprocal += min(w1, w2)
             total += w1
     return total_reciprocal / total
+
+
+def reciprocity_pho(g: nx.DiGraph, weight: str = "weight", null_model="WCM"):
+    """
+    The definition comes from:
+        Squartini, Tiziano, et al. "Reciprocity of weighted networks."
+        Scientific reports 3.1 (2013): 2729.
+    """
+    pass
 
 
 def reciprocity_node(g: nx.DiGraph, node: str, weight: str = "weight"):
@@ -260,15 +211,121 @@ def reciprocity_dyad(g: nx.DiGraph, node1: str, node2: str, weight: str = "weigh
         return w2 - min(w1, w2)
 
 
+def reciprocity_analysis(year: int, quarter: int, partition_csv_path: str):
+    # NOTE: partition labels are hardcoded and must be changed w.r.t. blockmodeling results
+    PARTITION_LABELS = {
+        0: "Peripheral",
+        1: "Core",
+        2: "Semi-Peripheral",
+        3: "US",
+    }
+
+    metrics = defaultdict(dict)
+    g = get_network(year, quarter)
+    countries = set(g.nodes())
+    p_df = pd.read_csv(partition_csv_path, keep_default_na=False, na_values=[""])
+
+    BM = nx.quotient_graph(
+        g,
+        partition=[
+            list(p_df[(p_df.partition == p) & p_df.country.isin(countries)].country)
+            for p in sorted(set(p_df.partition))
+        ],
+        relabel=True,
+        create_using=nx.DiGraph,
+        node_data=lambda p: {
+            "countries": sorted(p),
+        },
+        edge_data=lambda p1, p2: {
+            "weight": sum(
+                g.edges[ctry1, ctry2]["weight"]
+                for ctry1 in p1
+                for ctry2 in p2
+                if g.has_edge(ctry1, ctry2)
+            )
+        },
+    )
+
+    metrics["Reciprocity (r)"] = reciprocity_all(g)
+    for p in sorted(set(p_df.partition)):
+        label = PARTITION_LABELS[p]
+
+        total_within_weight = 0
+        for x, y in itertools.product(p_df[p_df.partition == p].country, repeat=2):
+            if g.has_edge(x, y):
+                total_within_weight += g.edges[x, y]["weight"]
+
+        metrics[f"Total Weight Inbound"][label] = BM.in_degree(p, weight="weight")
+        metrics[f"Total Weight Outbound"][label] = BM.out_degree(p, weight="weight")
+        metrics[f"Total Weight Within"][label] = total_within_weight
+
+    return metrics
+
+
+def plot_reciprocity(year_quarters, metrics):
+    year_quarters = [f"{x[0]} Q{x[1]}" for x in year_quarters]
+
+    fig, ax = plt.subplots(1, 1, figsize=(6, 5))
+    ax.plot(
+        range(len(year_quarters)), [x["Reciprocity (r)"] for x in metrics], marker="o"
+    )
+    ax.set_xticks(range(len(year_quarters)))
+    ax.set_xticklabels(year_quarters)
+    ax.set_xlabel("Year-Quarter")
+    ax.set_ylabel("Overall Reciprocity (r)")
+    fig.autofmt_xdate()
+    fig.savefig("figs/reciprocity_r.pdf", bbox_inches="tight")
+    plt.close(fig)
+
+    fig, axes = plt.subplots(1, 4, figsize=(22, 5))
+    for i, label in enumerate(metrics[0]["Total Weight Inbound"].keys()):
+        inbound = [x["Total Weight Inbound"][label] for x in metrics]
+        axes[i].plot(
+            range(len(year_quarters)),
+            inbound,
+            marker="o",
+            label=f"Inbound ({label})",
+        )
+
+        outbound = [x["Total Weight Outbound"][label] for x in metrics]
+        axes[i].plot(
+            range(len(year_quarters)),
+            outbound,
+            marker="x",
+            label=f"Outbound ({label})",
+        )
+        
+        within = [x["Total Weight Within"][label] for x in metrics]
+        axes[i].plot(
+            range(len(year_quarters)),
+            within,
+            marker="^",
+            label=f"Within ({label})",
+        )
+
+        axes[i].set_xticks(range(len(year_quarters)))
+        axes[i].set_xticklabels(year_quarters)
+        axes[i].set_xlabel("Year-Quarter")
+        axes[i].set_ylabel("Total Weight")
+        axes[i].set_ylim(0)
+        axes[i].legend()
+    fig.autofmt_xdate()
+    fig.savefig("figs/reciprocity_in_out_weight.pdf", bbox_inches="tight")
+    plt.close(fig)
+
+
 def main():
-    file_path = "data/economy_collaborators.csv"
-    data = pd.read_csv(file_path, keep_default_na=False, na_values=[""])
-    year_quarters = sorted(set(zip(data["year"], data["quarter"])))
+    graph_csv_path = "data/economy_collaborators.csv"
+    partition_csv_path = "data/blockmodeling_partitions.csv"
+    graph_data = pd.read_csv(graph_csv_path, keep_default_na=False, na_values=[""])
+    year_quarters = sorted(set(zip(graph_data["year"], graph_data["quarter"])))
 
-    # all quarters
-    block_modeling(partition_csv_path="data/blockmodeling_partitions.csv")
+    # block modling in all quarters
+    block_modeling(partition_csv_path=partition_csv_path)
 
-    # TODO: reciprocity
+    # reciprocity analysis in each quarter
+    metrics = [reciprocity_analysis(y, q, partition_csv_path) for y, q in year_quarters]
+    plot_reciprocity(year_quarters, metrics)
 
 
 if __name__ == "__main__":
