@@ -7,6 +7,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import multiprocessing as mp
 
+from pprint import pformat
 from collections import defaultdict
 from blockmodeling import get_network
 
@@ -90,29 +91,6 @@ def reciprocity_rho(g: nx.DiGraph, weight: str = "weight", initial_guess="simple
     return (reciprocity_all(g) - r_wcm) / (1 - r_wcm)
 
 
-def reciprocity_node(g: nx.DiGraph, node: str, weight: str = "weight"):
-    reciprocated_strength = 0
-    total_out, total_in = 0, 0
-    for n2 in g.nodes():
-        if node == n2:
-            continue
-        w1 = g.get_edge_data(node, n2, default={weight: 0})[weight]
-        w2 = g.get_edge_data(n2, node, default={weight: 0})[weight]
-        reciprocated_strength += min(w1, w2)
-        total_out += w1
-        total_in += w2
-    return total_out - reciprocated_strength, total_in - reciprocated_strength
-
-
-def reciprocity_dyad(g: nx.DiGraph, node1: str, node2: str, weight: str = "weight"):
-    w1 = g.get_edge_data(node1, node2, default={weight: 0})[weight]
-    w2 = g.get_edge_data(node2, node1, default={weight: 0})[weight]
-    if w1 > w2:
-        return min(w1, w2) - w1
-    else:
-        return w2 - min(w1, w2)
-
-
 def reciprocity_analysis(year: int, quarter: int, partition_csv_path: str):
     logging.info(f"Analyzing {year} Q{quarter}...")
 
@@ -150,24 +128,35 @@ def reciprocity_analysis(year: int, quarter: int, partition_csv_path: str):
         },
     )
 
+    metrics["Reciprocity (r)"] = reciprocity_all(g)
+
     initial_guess = "simple"
     if year == 2021 and quarter == 2 or year == 2023 and quarter == 1:
         initial_guess = "complex"
-    metrics["Reciprocity (r)"] = reciprocity_all(g)
+    metrics["Reciprocity (ρ)"] = 0
     metrics["Reciprocity (ρ)"] = reciprocity_rho(g, initial_guess=initial_guess)
+
+    total_within_weight = defaultdict(lambda: 0.0)
     for p in sorted(set(p_df.partition)):
         label = PARTITION_LABELS[p]
 
-        total_within_weight = 0
         for x, y in itertools.product(p_df[p_df.partition == p].country, repeat=2):
             if g.has_edge(x, y):
-                total_within_weight += g.edges[x, y]["weight"]
+                total_within_weight[label] += g.edges[x, y]["weight"]
 
         metrics[f"Total Weight Inbound"][label] = BM.in_degree(p, weight="weight")
         metrics[f"Total Weight Outbound"][label] = BM.out_degree(p, weight="weight")
-        metrics[f"Total Weight Within"][label] = total_within_weight
+        metrics[f"Total Weight Within"][label] = total_within_weight[label]
 
-    logging.info(metrics)
+    for p1 in sorted(set(p_df.partition)):
+        for p2 in sorted(set(p_df.partition)):
+            label1, label2 = PARTITION_LABELS[p1], PARTITION_LABELS[p2]
+            if p1 == p2:
+                metrics[f"Weight within {label1}"] = total_within_weight[label1]
+            else:
+                metrics[f"Weight {label1} to {label2}"] = BM.edges[p1, p2]["weight"]
+
+    logging.info(pformat(metrics))
     return metrics
 
 
@@ -196,8 +185,9 @@ def plot_reciprocity(year_quarters, metrics):
     fig.savefig("figs/reciprocity_r.pdf", bbox_inches="tight")
     plt.close(fig)
 
+    labels = ["US", "Core", "Semi-Peripheral", "Peripheral"]
     fig, axes = plt.subplots(1, 4, figsize=(22, 5))
-    for i, label in enumerate(metrics[0]["Total Weight Inbound"].keys()):
+    for i, label in enumerate(labels):
         inbound = [x["Total Weight Inbound"][label] for x in metrics]
         axes[i].plot(
             range(len(year_quarters)),
@@ -230,6 +220,50 @@ def plot_reciprocity(year_quarters, metrics):
         axes[i].legend()
     fig.autofmt_xdate()
     fig.savefig("figs/reciprocity_in_out_weight.pdf", bbox_inches="tight")
+    plt.close(fig)
+
+    fig, axes = plt.subplots(3, 4, figsize=(9, 8))
+    for i, year_quarter in enumerate(year_quarters):
+        i, j = i // 4, i % 4
+        if i >= 3:
+            break
+
+        image = np.zeros((4, 4))
+        for k, label1 in enumerate(labels):
+            for l, label2 in enumerate(labels):
+                if k == l:
+                    key = f"Weight within {label1}"
+                    continue
+                else:
+                    key = f"Weight {label1} to {label2}"
+                    key2 = f"Weight {label2} to {label1}"
+                image[k, l] = metrics[i][key] / metrics[i][key2]
+                axes[i][j].text(
+                    k,
+                    l,
+                    f"{image[k, l] * 100:.2f}%",
+                    ha="center",
+                    va="center",
+                    color="w",
+                    fontsize=6,
+                )
+
+        axes[i, j].imshow(image, )
+
+        axes[i, j].set_yticks([])
+        axes[i, j].set_xticks([])
+        if j == 0:
+            axes[i, j].set_yticks(range(4))
+            axes[i, j].set_yticklabels(labels)
+        if i == 0:
+            axes[i, j].set_xticks(range(4))
+            axes[i, j].set_xticklabels(labels, rotation=90)
+            axes[i, j].xaxis.set_ticks_position("top")
+        axes[i, j].set_xlabel(f"Year-Quarter: {year_quarter}")
+    # cbar = fig.colorbar(image, ax=ax)
+    # cbar.ax.set_ylabel("Amount of Contributions", rotation=-90, va="bottom")
+    fig.tight_layout()
+    fig.savefig("figs/reciprocity_matrix.pdf", bbox_inches="tight")
     plt.close(fig)
 
 
