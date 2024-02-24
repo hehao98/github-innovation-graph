@@ -133,7 +133,7 @@ def reciprocity_analysis(year: int, quarter: int, partition_csv_path: str):
     initial_guess = "simple"
     if year == 2021 and quarter == 2 or year == 2023 and quarter == 1:
         initial_guess = "complex"
-    metrics["Reciprocity (ρ)"] = 0
+    # metrics["Reciprocity (ρ)"] = 0 # Use this line to disable the estimation
     metrics["Reciprocity (ρ)"] = reciprocity_rho(g, initial_guess=initial_guess)
 
     total_within_weight = defaultdict(lambda: 0.0)
@@ -223,8 +223,8 @@ def plot_reciprocity(year_quarters, metrics):
     plt.close(fig)
 
     fig, axes = plt.subplots(3, 4, figsize=(9, 8))
-    for i, year_quarter in enumerate(year_quarters):
-        i, j = i // 4, i % 4
+    for id, year_quarter in enumerate(year_quarters):
+        i, j = id // 4, id % 4
         if i >= 3:
             break
 
@@ -237,7 +237,7 @@ def plot_reciprocity(year_quarters, metrics):
                 else:
                     key = f"Weight {label1} to {label2}"
                     key2 = f"Weight {label2} to {label1}"
-                image[k, l] = metrics[i][key] / metrics[i][key2]
+                image[k, l] = metrics[id][key] / metrics[id][key2]
                 axes[i][j].text(
                     k,
                     l,
