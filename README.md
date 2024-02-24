@@ -61,5 +61,6 @@ The Gephi visualization files can be found in the [visualization/](visualization
 All results can be generated with the following script:
 
 ```shell
-python blockmodeling/blockmodeling.py
+python blockmodeling.py
+python reciprocity.py
 ```
