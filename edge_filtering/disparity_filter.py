@@ -1,7 +1,3 @@
-'''
-This module implements the disparity filter to compute a significance score of edge weights in networks
-'''
-
 import networkx as nx
 import numpy as np
 from scipy import integrate
@@ -38,7 +34,7 @@ def disparity_filter(G, weight='weight'):
                 successors = list(G.successors(u))
                 if len(successors) == 1 and G.in_degree(successors[0]) == 1:
                     #we need to keep the connection as it is the only way to maintain the connectivity of the network
-                    v = G.successors(u)[0]
+                    v = successors[0] 
                     w = G[u][v][weight]
                     N.add_edge(u, v, weight = w, alpha_out=0., alpha_in=0.)
                     #there is no need to do the same for the k_in, since the link is built already from the tail
@@ -129,78 +125,31 @@ def disparity_filter_alpha_cut(G,weight='weight',alpha_t=0.4, cut_mode='or'):
             if alpha<alpha_t:
                 B.add_edge(u,v, weight=w[weight])
         return B                
-            
-def find_optimal_alpha(G, target_percentage, max_iter=1000):
-    """
-    Determines the optimal alpha value for filtering a graph based on a target edge retention percentage.
-
-    This function uses a proportional approach to dynamically adjust the alpha value. It decrements alpha 
-    based on the difference between the current and target edge counts, aiming to find the alpha value that 
-    results in a filtered graph with a number of edges closest to the target edge count specified by the threshold.
-
-    Args:
-    ----
-    G: Weighted NetworkX graph
-        The graph for which the optimal alpha value is to be determined.
-
-    target_percentage: float
-        The target percentage of edges to retain in the graph. It should be a value between 0 and 1.
-        A target_percentage of 1.0 implies retaining all edges, while 0.1 would aim to retain 10% of the edges.
-
-    max_iter: int (default=1000)
-        The maximum number of iterations to run the proportional adjustment process. This limits the computation 
-        time and ensures the function terminates.
-
-    Returns:
-    -------
-    closest_alpha: float
-        The calculated optimal alpha value that results in a graph with the number of edges closest to the 
-        target edge count based on the specified target_percentage.
-
-    """
-    if target_percentage == 1.0:
-        return 1  # Retain all edges
-
-    total_edges = G.number_of_edges()
-    target_edges = int(total_edges * target_percentage)
-    alpha = 1
-
-    closest_alpha = alpha
-    closest_edge_count = total_edges
-    closest_diff = abs(closest_edge_count - target_edges)
-
-    for _ in range(max_iter):
-        filtered_edges = [(u, v) for u, v, d in G.edges(data=True) if ('alpha_in' in d and d['alpha_in'] < alpha) or ('alpha_out' in d and d['alpha_out'] < alpha)]
-        current_edge_count = len(filtered_edges)
-        current_diff = abs(current_edge_count - target_edges)
-
-        if current_diff <= closest_diff:
-            closest_diff = current_diff
-            closest_edge_count = current_edge_count
-            closest_alpha = alpha
-        else:
-            break  # Stop if we start moving away from the target
-
-        # Proportional step size
-        step_size = max(0.001, 0.1 * (current_diff / total_edges))
-        alpha -= step_size
-
-        if alpha < 0:
-            alpha = 0  # Ensure alpha does not go below 0
-
-    return closest_alpha
 
 def load_data(file_path):
     return pd.read_csv(file_path)
 
-def filter_data(data, year, quarters):
-    return data[(data['year'] == year) & (data['quarter'].isin(quarters))]
+def aggregate_edges(data):
+    """
+    Aggregates the weights of edges across different years and quarters.
+    Sums up the weights for the same edge across all years and quarters.
+    """
+    # Group by source and destination and sum the weights
+    aggregated_data = data.groupby(['source', 'destination']).agg({'weight': 'sum'}).reset_index()
+    return aggregated_data
 
-def load_data(file_path):
-    return pd.read_csv(file_path)
+def filter_data(data, year=None, quarters=None):
+    """
+    Filter data based on the provided year and quarters.
+    If year or quarters are None, include and aggregate all data.
+    """
+    if year is not None and quarters is not None:
+        filtered_data = data[(data['year'] == year) & (data['quarter'].isin(quarters))]
+    else:
+        filtered_data = data  # Include all data if year or quarters are not specified
 
-def filter_data(data, year, quarters):
-    return data[(data['year'] == year) & (data['quarter'].isin(quarters))]
+    # Aggregate weights for the same edge across different years and quarters
+    return aggregate_edges(filtered_data)
 
 def normalize_weights(df, mode='outgoing'):
     """
@@ -215,6 +164,7 @@ def normalize_weights(df, mode='outgoing'):
         The mode of normalization. Can be 'outgoing', 'incoming', or 'none'.
         'outgoing' normalizes based on the sum of weights of outgoing edges for each source node.
         'incoming' normalizes based on the sum of weights of incoming edges for each destination node.
+        'log' transforms the weights using the log function.
         'none' returns the DataFrame without any changes.
 
     Returns:
@@ -244,12 +194,15 @@ def normalize_weights(df, mode='outgoing'):
         normalized_df = normalized_df.merge(total_weights, on='destination')
         normalized_df['weight'] = normalized_df['weight'] / normalized_df['total_incoming_weight']
 
+    elif mode == 'log':
+        normalized_df['weight'] = np.log(normalized_df['weight'])
+
     # Drop the total weights columns used for normalization
     normalized_df.drop(columns=['total_outgoing_weight', 'total_incoming_weight'], errors='ignore', inplace=True)
 
     return normalized_df
 
-def process_entity_merging(df, merge_eu, merge_cn_hk, exclude_country=None):
+def process_entity_merging(df, merge_eu, merge_cn_hk, exclude_countries=None):
     """
     Processes the DataFrame to handle entity merging for EU and HK-CN, including self-loop handling,
     and excluding a specified country if needed.
@@ -284,9 +237,10 @@ def process_entity_merging(df, merge_eu, merge_cn_hk, exclude_country=None):
         # Merge Hong Kong with China
         df.replace({'HK': 'CN'}, inplace=True)
 
-    if exclude_country:
-        # Exclude the specified country
-        df = df[(df['source'] != exclude_country) & (df['destination'] != exclude_country)]
+    # Exclude specified countries
+    if exclude_countries:
+        for country in exclude_countries:
+            df = df[(df['source'] != country) & (df['destination'] != country)]
 
     # Handle self-loops after merging
     self_loops = df[df['source'] == df['destination']]
@@ -298,62 +252,102 @@ def process_entity_merging(df, merge_eu, merge_cn_hk, exclude_country=None):
     
     return df
 
+def create_output_file_name(base_path, alpha):
+    '''
+    Create a file name by appending the alpha value to the base file path.
+
+    Args:
+        base_path (str): Base file path.
+        alpha (float): Alpha value.
+
+    Returns:
+        str: Constructed file name with alpha value appended.
+    '''
+    alpha_str = str(alpha).replace('.', '_')
+    return f"{base_path}_alpha_{alpha_str}.csv"
+
+def filter_graph_by_alpha(G, alpha):
+    '''
+    Filters the given graph based on the optimal alpha value.
+
+    Args:
+        G (NetworkX graph): Input graph.
+        alpha (float): Optimal alpha value for filtering.
+
+    Returns:
+        NetworkX graph: Filtered graph based on the alpha value.
+    '''
+    if nx.is_directed(G):
+        G_filtered = nx.DiGraph([(u, v, d) for u, v, d in G.edges(data=True) if ('alpha_in' in d and d['alpha_in'] < alpha) or ('alpha_out' in d and d['alpha_out'] < alpha)])
+    else:
+        G_filtered = nx.Graph([(u, v, d) for u, v, d in G.edges(data=True) if 'alpha' in d and d['alpha'] < alpha])
+
+    return G_filtered
+
+def print_graph_stats(G_original, G_filtered, alpha):
+    '''
+    Print statistics of the original and filtered graph.
+
+    Args:
+        G_original (NetworkX graph): Original graph.
+        G_filtered (NetworkX graph): Filtered graph.
+        alpha (float): Alpha value used for filtering.
+    '''
+    print(f'Optimal alpha = {alpha}')
+    print(f'Original: nodes = {G_original.number_of_nodes()}, edges = {G_original.number_of_edges()}')
+    print(f'Filtered: nodes = {G_filtered.number_of_nodes()}, edges = {G_filtered.number_of_edges()}')
+
+def save_filtered_graph(G_filtered, df_original, file_name):
+    '''
+    Save the filtered graph to a CSV file.
+
+    Args:
+        G_filtered (NetworkX graph): Filtered graph.
+        df_original (DataFrame): Original DataFrame.
+        file_name (str): File name for saving the CSV.
+    '''
+    edges_df = nx.to_pandas_edgelist(G_filtered)
+    merged_df = pd.merge(df_original, edges_df, how='inner', left_on=['source', 'destination'], right_on=['source', 'target'])
+    merged_df.drop(columns=['target', 'weight_y'], inplace=True)
+    merged_df = merged_df.rename(columns={"weight_x": "weight"})
+    merged_df = merged_df[['source', 'destination', 'weight', 'alpha_out', 'alpha_in']]
+    merged_df.to_csv(file_name, index=False)
+    print(f"Filtered graph data written to {file_name}")
+
 def main():
     parser = argparse.ArgumentParser(description='Collaboration Network Filter')
     parser.add_argument('--inputFilePath', required=True, help='Location of input Collaboration Network Data edgelist')
     parser.add_argument('--outputFilePath', required=True, help='Location of output filtered edgelist')
-    parser.add_argument('--year', type=int, choices=[2020, 2021, 2022, 2023], required=True, help='Year to filter data')
-    parser.add_argument('--quarters', type=int, nargs='+', choices=[1, 2, 3, 4], required=True, help='Quarters to filter data')
-    parser.add_argument('--threshold', type=float, required=True, help='Percentage of edges to retain (e.g., 0.10 for 10%)')
-    parser.add_argument('--normalize', choices=['outgoing', 'incoming', 'none'], default='none', help='Normalize weights by outgoing or incoming totals')
+    parser.add_argument('--normalize', choices=['outgoing', 'incoming', 'log', 'none'], default='none', help='Normalize weights by outgoing or incoming totals')
     parser.add_argument('--mergeEU', action='store_true', help='Merge all EU countries into a single node')
     parser.add_argument('--mergeCNHK', action='store_true', help='Combine Hong Kong with China')
-    parser.add_argument('--excludeUS', action='store_true', help='Exclude the US from the network')
-
+    parser.add_argument('--excludeCountries', nargs='*', type=str, default=[], help='List of country codes to exclude from the network')
+    parser.add_argument('--optimalAlpha', nargs='*', type=float, default=[0.09], help='List of optimal alpha values')
     args = parser.parse_args()
 
     # Load and filter data
-    input_file_path = args.inputFilePath
-    df = load_data(input_file_path)
-    filtered_df = filter_data(df, args.year, args.quarters)
-
-    exclude_country = 'US' if args.excludeUS else None
-    filtered_df = process_entity_merging(filtered_df, args.mergeEU, args.mergeCNHK, exclude_country)
+    df = load_data(args.inputFilePath)
+    filtered_df = filter_data(df)
+    filtered_df = process_entity_merging(filtered_df, args.mergeEU, args.mergeCNHK, exclude_countries=args.excludeCountries)
 
     # Normalize weights if required
     if args.normalize != 'none':
         filtered_df = normalize_weights(filtered_df, mode=args.normalize)
 
-    Graphtype = nx.DiGraph()
-    G = nx.from_pandas_edgelist(filtered_df, source='source', target='destination', edge_attr='weight', create_using=Graphtype)
+    # Create graph from edge list
+    G = nx.from_pandas_edgelist(filtered_df, source='source', target='destination', edge_attr='weight', create_using=nx.DiGraph())
     G = disparity_filter(G)
 
-    target_percentage = args.threshold  # Use the provided threshold argument
-    optimal_alpha = find_optimal_alpha(G, target_percentage)
+    for optimal_alpha in args.optimalAlpha:
+        output_file_name = create_output_file_name(args.outputFilePath, optimal_alpha)
 
-    # Filter the graph using the optimal alpha
-    if nx.is_directed(G):
-        G2 = nx.DiGraph([(u, v, d) for u, v, d in G.edges(data=True) if ('alpha_in' in d and d['alpha_in'] < optimal_alpha) or ('alpha_out' in d and d['alpha_out'] < optimal_alpha)])
-    else:
-        G2 = nx.Graph([(u, v, d) for u, v, d in G.edges(data=True) if 'alpha' in d and d['alpha'] < optimal_alpha])
+        # Filter the graph based on the optimal alpha
+        G_filtered = filter_graph_by_alpha(G, optimal_alpha)
 
-    print('optimal alpha =', optimal_alpha)
-    print('original: nodes = %s, edges = %s' % (G.number_of_nodes(), G.number_of_edges()))
-    print('backbone: nodes = %s, edges = %s' % (G2.number_of_nodes(), G2.number_of_edges()))
+        print_graph_stats(G, G_filtered, optimal_alpha)
 
-    # Convert G2 back to DataFrame
-    edges_df = nx.to_pandas_edgelist(G2)
-
-    # Merge with the original dataframe using inner join to keep original columns
-    merged_df = pd.merge(filtered_df, edges_df,  how='inner', left_on=['source','destination'], right_on = ['source','target'])
-    merged_df.drop(columns=['target','weight_y'], inplace=True)
-    merged_df = merged_df.rename(columns={"weight_x": "weight"})
-
-    # Write DataFrame to CSV
-    output_file_path = args.outputFilePath
-    merged_df.to_csv(output_file_path, index=False)
-
-    print(f"Filtered graph data written to {output_file_path}")
+        # Convert filtered graph to DataFrame and save
+        save_filtered_graph(G_filtered, filtered_df, output_file_name)
 
 if __name__ == '__main__':
     main()
