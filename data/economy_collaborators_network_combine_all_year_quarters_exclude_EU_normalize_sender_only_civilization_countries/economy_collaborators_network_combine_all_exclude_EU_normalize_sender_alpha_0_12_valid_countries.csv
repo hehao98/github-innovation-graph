@@ -1,4 +1,4 @@
-source,destination,weight,alpha_in,alpha_out
+source,target,weight,alpha_in,alpha_out
 AE,DE,0.0389037698585475,0.6539,0.0622
 AE,GB,0.0388898370911168,0.626,0.0622
 AE,IN,0.136980002995545,0.1084,0.0
