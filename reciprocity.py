@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
+import matplotlib.patheffects
 import multiprocessing as mp
 
 from pprint import pformat
@@ -241,14 +242,15 @@ def plot_reciprocity(year_quarters, metrics):
                 axes[i][j].text(
                     k,
                     l,
-                    f"{image[k, l] * 100:.2f}%",
+                    f"{image[k, l] * 100:.1f}%",
                     ha="center",
                     va="center",
                     color="w",
-                    fontsize=6,
+                    fontsize=8,
+                    path_effects=[matplotlib.patheffects.withStroke(linewidth=2, foreground='black')]
                 )
 
-        axes[i, j].imshow(image, )
+        axes[i, j].imshow(image)
 
         axes[i, j].set_yticks([])
         axes[i, j].set_xticks([])
