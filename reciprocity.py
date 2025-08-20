@@ -247,7 +247,7 @@ def plot_reciprocity(year_quarters, metrics):
                     va="center",
                     color="w",
                     fontsize=8,
-                    path_effects=[matplotlib.patheffects.withStroke(linewidth=2, foreground='black')]
+                    path_effects=[matplotlib.patheffects.withStroke(linewidth=1, foreground='black')]
                 )
 
         axes[i, j].imshow(image)
