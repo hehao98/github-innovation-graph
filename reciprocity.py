@@ -238,11 +238,11 @@ def plot_reciprocity(year_quarters, metrics):
                 else:
                     key = f"Weight {label1} to {label2}"
                     key2 = f"Weight {label2} to {label1}"
-                image[k, l] = metrics[id][key] / metrics[id][key2]
+                image[l, k] = metrics[id][key] / metrics[id][key2]
                 axes[i][j].text(
-                    k,
                     l,
-                    f"{image[k, l] * 100:.1f}%",
+                    k,
+                    f"{image[l, k] * 100:.1f}%",
                     ha="center",
                     va="center",
                     color="w",
