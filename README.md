@@ -1,9 +1,12 @@
 # Replication Package: The Structure of Cross-National Collaboration in Open-Source Software Development
 
+This repository contains the replication package for the following paper:
+
+> Henry Xu, Katy Yu, Hao He, Hongbo Fang, Bogdan Vasilescu, and Patrick S. Park. 2025. The Structure of Cross-National Collaboration in Open-Source Software Development. In Proceedings of the 34th ACM International Conference on Information and Knowledge Management (CIKM ’25), November 10–14, 2025, Seoul, Republic of Korea. ACM, New York, NY, USA, 10 pages. https://doi.org/10.1145/3746252.3761237
+
 ## Environment Requirements
 
 This replication package works with Python 3.10+, [Gephi](https://gephi.org/) 0.10+, and the latest version of R. The required Python dependencies are described in [requirements.txt](requirements.txt).
-
 
 ## Dataset 
 
