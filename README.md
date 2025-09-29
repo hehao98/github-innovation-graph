@@ -64,3 +64,45 @@ python reciprocity.py
 ## Exponential Random Graph Models (Section 3.3)
 
 The ERGM results were obtained from the following [R file](network_analysis/github_civilization.R). 
+
+## Node2Vec (Section 3.4)
+
+The Node2Vec results can be obtained by following these 3 steps:
+1. Embedding generation:
+Download all files in github-innovation-graph/node2vec/
+    Including the edgelist from graph and the two python files     
+    1. graph/economy_collaborators_no_US_with_weights.edgelist
+    2. src/node2vec.py
+    3. src/main.py
+
+# Then go into the node2vec folder (if you're running this on terminal, ensure you are in the node2vec folder, otherwise you need to update the paths to match)
+Install requirements for node2vec with node2vec/node2vec_requirements.txt
+
+```shell
+pip install -r node2vec_requirements.txt
+```
+
+then run the command: 
+```shell
+python node2vec_no_us.py
+```
+This will generate all 25 embedding files in the node2vec folder (emb/no_US_experiments/)
+    
+2. Silhouette score:
+
+run the command: 
+```shell
+python silhouette_analysis.py
+```
+This will generate elbow and silhouette analysis and show some plots. We will be using the 6 clusters from the silhouette analysis for both homophily and structural equivalence case. The homophily setting (p = 4, q = 0.25), silhouette score was highest at 3 clusters, and then 6, but 3 clusters was merging too many countries into one cluster (and thus not as informative), so we used 6 clusters. Similarly, for structural equivalence case (p = 0.25, q = 4), the silhouette score was highest at 2 clusters, and then 6, but 2 clusters was too few clusters to be informative.  
+
+3. K-means clustering based on 6 clusters from silhouette analysis: 
+
+run the command: 
+```shell
+python k_means_clustering.py
+```
+
+This will generate the csv files for k-means clustering based on 6 clusters from silhouette analysis. The csv files will be saved in the KMeans_Community_Results folder. You can then take these csv files and import them into Gephi to visualize the communities. 
+
+Note that the current settings only have 2 p and q values (0.25 and 4) and 1 cluster target (6 clusters). You can modify the P_VALUES, Q_VALUES, and CLUSTER_TARGETS variables in the k_means_clustering.py file to change the settings.
