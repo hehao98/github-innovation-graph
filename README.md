@@ -75,7 +75,8 @@ Download all files in github-innovation-graph/node2vec/
     2. src/node2vec.py
     3. src/main.py
 
-# Then go into the node2vec folder (if you're running this on terminal, ensure you are in the node2vec folder, otherwise you need to update the paths to match)
+Note: It is important that you then go into the node2vec folder (if you're running this on terminal, ensure you are in the node2vec folder, otherwise you need to update the paths to match)
+
 Install requirements for node2vec with node2vec/node2vec_requirements.txt
 
 ```shell
